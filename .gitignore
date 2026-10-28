@@ -1,0 +1,7 @@
+/target/
+/dist/
+/prebuilt/
+*.jkr
+*.backup-*
+!tests/fixtures/*.jkr
+

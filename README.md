@@ -24,7 +24,7 @@ Unpack the platform archive. On Windows, launch `balatro-workshop.exe`. On macOS
 ./balatro-workshop /path/to/Balatro/1/save.jkr
 ```
 
-Linux requires a graphical X11 or Wayland session, an OpenGL driver (software rendering also works), and an XDG desktop portal with a file chooser, such as `xdg-desktop-portal-kde` on KDE. Packaged Linux binaries built on Ubuntu 24.04 require compatible system libraries; build from source for older distributions.
+Linux requires a graphical X11 or Wayland session, an OpenGL driver (software rendering also works), and an XDG desktop portal with a file chooser, such as `xdg-desktop-portal-kde` on KDE. X11 also requires `libxkbcommon-x11-0` on Debian/Ubuntu. Packaged Linux binaries built on Ubuntu 24.04 require compatible system libraries; build from source for older distributions.
 
 The included GitHub Actions workflow builds Linux x86-64, Windows x86-64, and separate macOS Apple Silicon and Intel packages. It uploads downloadable workflow artifacts; it does not publish releases automatically. Windows builds are unsigned. macOS packages use ad-hoc signing, without Developer ID signing or notarization.
 
@@ -36,7 +36,8 @@ Install the current stable [Rust toolchain](https://rustup.rs/). The locked depe
 
 ```bash
 sudo apt install build-essential pkg-config libx11-dev libxi-dev libxcursor-dev \
-  libxrandr-dev libxinerama-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev
+  libxrandr-dev libxinerama-dev libxkbcommon-dev libxkbcommon-x11-dev \
+  libwayland-dev libgl1-mesa-dev
 ```
 
 **Windows:** install the Visual Studio Build Tools with “Desktop development with C++” and the Windows SDK; use Rust's MSVC toolchain. **macOS:** install Xcode Command Line Tools (`xcode-select --install`).
@@ -55,7 +56,7 @@ The executable is in `target/release/`. Python 3.11+ is needed only for optional
 python3 scripts/package.py
 ```
 
-Use `python` instead of `python3` on Windows if that is your installed command. Packages and SHA-256 checksums appear in `dist/`.
+Use `python` instead of `python3` on Windows if that is your installed command. Packages and SHA-256 checksums appear in `dist/`. The Linux x86-64 artifact is named `linux_x86_64`; it contains `linux_x86_64.tar.gz` and its checksum.
 
 ## Editing a save
 

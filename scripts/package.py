@@ -22,7 +22,10 @@ def main():
     version = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
     system = platform.system().lower()
     architecture = args.target or platform.machine()
-    name = f"balatro-workshop-{version}-{system}-{architecture}"
+    if system == "linux":
+        name = f"linux_{architecture.split('-')[0]}"
+    else:
+        name = f"balatro-workshop-{version}-{system}-{architecture}"
     executable = "balatro-workshop.exe" if system == "windows" else "balatro-workshop"
     target = ROOT / "target"
     if args.target:

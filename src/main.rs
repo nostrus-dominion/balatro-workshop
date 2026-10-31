@@ -3,7 +3,7 @@
 use balatro_workshop::{
     discovery,
     document::{self, Document},
-    fields,
+    fields, jokers,
     lua::{self, Key, Value},
 };
 use eframe::egui::{self, Color32, RichText};
@@ -25,6 +25,7 @@ mod ui_tests;
 #[derive(Clone, Copy, PartialEq)]
 enum Tab {
     Quick,
+    Jokers,
     Tree,
     Raw,
 }
@@ -382,6 +383,7 @@ impl Workshop {
         let previous = self.tab;
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.tab, Tab::Quick, "Quick edit");
+            ui.selectable_value(&mut self.tab, Tab::Jokers, "Jokers");
             ui.selectable_value(&mut self.tab, Tab::Tree, "Data tree");
             ui.selectable_value(&mut self.tab, Tab::Raw, "Advanced text");
         });
@@ -398,6 +400,7 @@ impl Workshop {
         }
         ui.add_space(6.0);
         match self.tab {
+            Tab::Jokers => self.joker_editor(ui),
             Tab::Quick => {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.search)
@@ -490,6 +493,117 @@ impl Workshop {
                                 .desired_rows(30),
                         );
                     });
+            }
+        }
+    }
+
+    fn joker_editor(&mut self, ui: &mut egui::Ui) {
+        let data = &self.document.as_ref().unwrap().data;
+        let owned = match jokers::list(data) {
+            Ok(Some(owned)) => owned,
+            Ok(None) => {
+                ui.add_space(20.0);
+                ui.label("Open the current run's save.jkr to see your Jokers.");
+                ui.label(
+                    RichText::new(
+                        "Profile and collection files do not contain the Jokers in your run.",
+                    )
+                    .color(MUTED),
+                );
+                return;
+            }
+            Err(error) => {
+                ui.colored_label(RED, error);
+                return;
+            }
+        };
+        ui.horizontal(|ui| {
+            ui.heading(format!("{} Jokers in this save", owned.len()));
+            if let Some(Value::Number(limit)) = data.get("cardAreas.jokers.config.card_limit") {
+                ui.label(RichText::new(format!("Joker slots: {limit}")).color(GOLD));
+            }
+        });
+        ui.label(RichText::new("Choose an edition for each owned Joker. Changes stay in the editor until you save.").color(MUTED));
+        ui.label(
+            RichText::new("Negative adds one slot; changing it back removes that slot.")
+                .small()
+                .color(GOLD),
+        );
+        if owned.is_empty() {
+            ui.add_space(20.0);
+            ui.label("There are no owned Jokers in this saved run yet.");
+            return;
+        }
+        let mut change = None;
+        egui::ScrollArea::vertical()
+            .id_salt("jokers-scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for joker in owned {
+                    ui.push_id((self.document_id, &joker.slot), |ui| {
+                        egui::Frame::group(ui.style())
+                            .inner_margin(12.0)
+                            .show(ui, |ui| {
+                                ui.set_min_width(ui.available_width());
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{} · {}", joker.slot, joker.name))
+                                            .strong()
+                                            .size(18.0),
+                                    );
+                                    if !joker.center.is_empty() {
+                                        ui.label(RichText::new(&joker.center).small().color(MUTED));
+                                    }
+                                });
+                                match joker.edition {
+                                    Ok(current) => {
+                                        let mut selected = current;
+                                        ui.horizontal(|ui| {
+                                            ui.label("Edition");
+                                            egui::ComboBox::from_id_salt("edition")
+                                                .selected_text(current.label())
+                                                .width(165.0)
+                                                .show_ui(ui, |ui| {
+                                                    for edition in jokers::Edition::ALL {
+                                                        ui.selectable_value(
+                                                            &mut selected,
+                                                            edition,
+                                                            edition.label(),
+                                                        );
+                                                    }
+                                                });
+                                            ui.label(RichText::new(current.bonus()).color(MUTED));
+                                        });
+                                        if selected != current {
+                                            change = Some((joker.key, joker.name, selected));
+                                        }
+                                    }
+                                    Err(reason) => {
+                                        ui.colored_label(GOLD, reason);
+                                    }
+                                }
+                            });
+                    });
+                }
+            });
+        if let Some((key, name, edition)) = change {
+            match jokers::set_edition(&mut self.document.as_mut().unwrap().data, &key, edition) {
+                Ok(delta) => {
+                    // Edition fields may have moved table indices used by the scalar editor.
+                    self.edits.clear();
+                    self.document_id = self.document_id.wrapping_add(1);
+                    self.error = None;
+                    self.status = format!(
+                        "{name}: {}.{} Save when ready.",
+                        edition.label(),
+                        match delta {
+                            1 => " Added one Joker slot.",
+                            -1 => " Removed one Joker slot.",
+                            _ => "",
+                        }
+                    );
+                }
+                Err(error) => self.error = Some(error),
             }
         }
     }

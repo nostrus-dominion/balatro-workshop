@@ -1,8 +1,8 @@
-# Balatro Workshop 0.1.2
+# Balatro Workshop 0.2.0
 
 This repository contains the complete Rust project for Linux, Windows, and macOS. Download desktop packages from the repository's [Actions page](https://github.com/nostrus-dominion/balatro-workshop/actions/workflows/build.yml) after a successful **Desktop builds** run, or build from source below.
 
-Version 0.1.2 keeps each field's in-progress text in memory until you press Enter, leave the field, or save. It also adds **Play Balatro** to launch the game through Steam. The window title must say **Balatro Workshop 0.1.2**. Existing saves and backups need no conversion.
+Version 0.2.0 adds a **Jokers** tab. Open your run's `save.jkr` to see the Jokers you own, then choose Normal, Foil, Holographic, Polychrome, or Negative for each one. Changing to or from Negative adjusts the Joker slot limit automatically. Choose **Save + backup** when finished. The window title must say **Balatro Workshop 0.2.0**.
 
 ## Download a desktop build
 
@@ -29,7 +29,7 @@ cargo run --locked --release
 
 The GitHub Actions workflow runs when changes are pushed. You can also use **Actions → Desktop builds → Run workflow**. It builds Windows x86-64, Linux x86-64, macOS Apple Silicon, and macOS Intel packages. These packages are not code-signed with commercial signing credentials.
 
-The source previously passed compile checks for all four targets, and the Linux executable was built and run. See the current workflow results for native build status and `VALIDATION.md` for the checks performed before this repository upload. Compiled executables are kept in downloadable packages rather than tracked in the source repository.
+Version 0.1.2 completed native builds and automated tests for all four targets. See the current workflow results for native build status and `VALIDATION.md` for the checks performed before this repository upload. Compiled executables are kept in downloadable packages rather than tracked in the source repository.
 
 ## First edit
 

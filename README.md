@@ -6,6 +6,7 @@ A native, offline Balatro save editor for **Linux, Windows, and macOS**, written
 
 - Opens raw-DEFLATE `.jkr` saves and backups, including run, profile, settings, and collection data.
 - Edits money, ante, round, hand size, joker/consumable slots, hands, discards, reroll cost, probabilities, profile stats, and settings when those fields exist.
+- Lists the owned Jokers in a run by name and position. Change their edition to Normal, Foil, Holographic, Polychrome, or Negative using a dropdown; Negative slot changes are handled automatically.
 - Provides an expandable data tree and an advanced **data-only Lua table** editor. Numeric keys, sparse tables, byte strings, unknown fields, and decimal numeric text are preserved.
 - Finds candidate save folders on Windows, macOS, native Linux, and Steam/Proton, including Flatpak Steam and external Steam libraries. Browse any custom folder when automatic discovery misses it.
 - Creates a uniquely named, byte-for-byte backup before each source overwrite, validates output, and uses a same-directory temporary file to replace the save.
@@ -62,13 +63,31 @@ Use `python` instead of `python3` on Windows if that is your installed command. 
 
 1. Close Balatro. Make sure you have a separate backup of the complete profile folder before your first edit.
 2. Open `save.jkr` for the active run, `profile.jkr` for profile stats, `settings.jkr` for preferences, or `meta.jkr` for collection data.
-3. Change existing fields in **Quick edit**, edit values in **Data tree**, or edit the table in **Advanced text** and click **Apply text**.
+3. Use **Jokers** for edition changes, change common values in **Quick edit**, edit values in **Data tree**, or edit the table in **Advanced text** and click **Apply text**.
 4. Choose **Save + backup** to overwrite the opened file, or **Save copy** to create a separate file. Save copy switches the editor to the new file.
 5. Start Balatro and check the result. Steam Cloud may replace local edits during synchronization; resolve cloud conflicts deliberately.
 
 Quick controls change the named stored values, not every related piece of game state. For example, “Hands per round” changes `GAME.round_resets.hands`, not the current round's remaining hands. The data tree exposes other stored values. Slot changes may need a new round. Structurally valid values can still be unsuitable for the game's current state.
 
 **Revert** discards unsaved edits; it does not undo a previous disk save. **Discard text edits** discards only unapplied text changes. Changing files or closing the window prompts before discarding unsaved changes.
+
+### Change a Joker's edition
+
+Open the active run's `save.jkr` and choose **Jokers**. The editor reads `cardAreas.jokers.cards`, displays owned Jokers in saved position order, and shows their names, internal IDs, and current editions. Shop, booster, playing-card, and collection entries are excluded. Duplicate Jokers remain separate rows.
+
+Use the **Edition** dropdown on the desired row:
+
+| Edition | Bonus |
+| --- | --- |
+| Normal | No edition bonus |
+| Foil | +50 Chips |
+| Holographic | +10 Mult |
+| Polychrome | ×1.5 Mult |
+| Negative | +1 Joker slot |
+
+Changing an edition replaces its old edition bonus. Converting a non-Negative Joker to Negative raises the saved Joker slot limit by one; converting it back lowers that limit by one. Repeatedly selecting the same edition does not add slots. Other card fields, including abilities, stickers, and unknown data, are preserved. Edits stay in memory until **Save + backup**, **Save copy**, or **Save & play**; **Revert** restores the last loaded or saved state.
+
+This control supports the base game's edition and slot layout. Custom edition fields and recognized modded slot layouts are displayed with an explanation and left intact; use Advanced text for those saves. An invalid slot limit prevents a Negative transition without applying a partial change. Profile and collection files show an explanation instead of an empty run editor. Apply or discard any Advanced text draft before using the Jokers controls.
 
 ### Launch Balatro
 
@@ -122,6 +141,7 @@ Tests cover independent zlib-produced `.jkr` input, round trips, sparse/mixed ke
 | File | Purpose |
 | --- | --- |
 | `src/main.rs` | Native desktop interface and editing flow |
+| `src/jokers.rs` | Owned-Joker discovery, edition bonuses, and atomic Negative slot updates |
 | `src/edits.rs` | Persistent field drafts, validation, and committing complete entries |
 | `src/launch.rs` | Asynchronous Steam launch request and error handling |
 | `src/ui_tests.rs` | Full application-loop input and launch-flow regression tests |

@@ -1,5 +1,18 @@
 # Validation
 
+## 0.2.0 — 2026-10-31
+
+- `cargo fmt --check` and `cargo clippy --locked --all-targets -- -D warnings`: passed on Linux x86-64.
+- `cargo test --locked`: **47 tests passed** (16 UI/launcher, 24 existing core, 7 Joker integration tests).
+- `cargo test --locked --no-default-features`: **31 integration tests passed**.
+- A synthetic six-Joker fixture covers duplicate names, all five editions, owned-vs-shop/booster discovery, and unrelated saved data.
+- All 25 edition transitions are checked, including complete bonus fields, replacing the previous edition, returning to Normal, and changing the saved slot limit exactly once when entering or leaving Negative.
+- Invalid or missing slot limits, conflicting edition flags, unknown edition fields, and recognized modded slot configurations are rejected without partial mutation. Sparse numeric keys and distinct string keys are preserved.
+- Full application-loop tests click the Jokers tab and dropdowns, change Foil to Polychrome to Negative, inspect Advanced text, save/reopen, verify the exact original backup, revert, switch files, and block edits while raw text is unapplied.
+- Native Linux debug application exercised under Xvfb/X11 with software OpenGL: visually inspected the six-Joker list and dropdown; changed Foil to Polychrome to Negative; confirmed no disk write before Save; saved; independently decompressed the result and verified two Negative Jokers, slot limit 7, the other Joker's Eternal flag, and a byte-exact original backup.
+
+No dependencies changed. The fixture is synthetic and is not a playable run. Real player saves, in-game loading, Steamodded/custom edition compatibility, and native Wayland interaction remain unverified. The edition dropdown intentionally supports the base-game schema and leaves recognized custom schemas intact. See the GitHub Actions run for this commit for native release-build, test, and packaging results on Linux, Windows, and both macOS architectures.
+
 ## 0.1.2 — 2026-10-26
 
 - `cargo fmt --check`: passed.

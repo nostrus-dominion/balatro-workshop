@@ -58,11 +58,15 @@ impl Editor {
     }
 
     fn click_text(&mut self, text: &str) {
-        let position = self
+        self.click_text_match(text, false);
+    }
+
+    fn click_text_match(&mut self, text: &str, last: bool) {
+        let positions: Vec<_> = self
             .output
             .shapes
             .iter()
-            .find_map(|shape| {
+            .filter_map(|shape| {
                 if let egui::epaint::Shape::Text(shape) = &shape.shape {
                     if shape.galley.text() == text {
                         return Some(shape.pos + shape.galley.size() * 0.5);
@@ -70,7 +74,13 @@ impl Editor {
                 }
                 None
             })
-            .unwrap_or_else(|| panic!("visible text not found: {text}"));
+            .collect();
+        let position = *(if last {
+            positions.last()
+        } else {
+            positions.first()
+        })
+        .unwrap_or_else(|| panic!("visible text not found: {text}"));
         self.frame(vec![egui::Event::PointerMoved(position)]);
         for pressed in [true, false] {
             self.frame(vec![egui::Event::PointerButton {
@@ -267,4 +277,108 @@ fn opening_another_file_clears_previous_input() {
     editor.frame(Vec::new());
     assert!(!editor.app.dirty());
     assert_eq!(editor.value("GAME.dollars"), &Value::Number("42".into()));
+}
+
+#[test]
+fn joker_dropdown_changes_foil_to_polychrome_then_negative_and_saves() {
+    let mut editor = Editor::new(include_bytes!("../tests/fixtures/jokers.lua"));
+    let path = editor.app.document.as_ref().unwrap().path.clone();
+    let original = std::fs::read(&path).unwrap();
+    editor.click_text("Jokers");
+    editor.frame(Vec::new());
+    assert!(matches!(editor.app.tab, Tab::Jokers));
+    editor.click_text("Foil");
+    editor.frame(Vec::new());
+    editor.click_text_match("Polychrome", true);
+    let owned = jokers::list(&editor.app.document.as_ref().unwrap().data)
+        .unwrap()
+        .unwrap();
+    assert_eq!(owned.len(), 6);
+    assert_eq!(owned[0].edition, Ok(jokers::Edition::Polychrome));
+    assert_eq!(owned[3].edition, Ok(jokers::Edition::Polychrome));
+    assert_eq!(
+        editor.value("cardAreas.jokers.config.card_limit"),
+        &Value::Number("6".into())
+    );
+    editor.frame(Vec::new());
+    editor.click_text("Polychrome");
+    editor.frame(Vec::new());
+    editor.click_text_match("Negative", true);
+    assert!(editor.app.error.is_none());
+    assert_eq!(
+        editor.value("cardAreas.jokers.config.card_limit"),
+        &Value::Number("7".into())
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    editor.click_text("Advanced text");
+    let raw = lua::parse(editor.app.raw.as_bytes()).unwrap();
+    assert_eq!(
+        jokers::list(&raw).unwrap().unwrap()[0].edition,
+        Ok(jokers::Edition::Negative)
+    );
+    editor.key(egui::Key::S, egui::Modifiers::COMMAND);
+    assert!(editor.app.error.is_none(), "{:?}", editor.app.error);
+    let doc = editor.app.document.as_ref().unwrap();
+    assert_eq!(
+        std::fs::read(doc.last_backup.as_ref().unwrap()).unwrap(),
+        original
+    );
+    let saved = Document::open(&path).unwrap();
+    assert_eq!(
+        saved.data.get("cardAreas.jokers.config.card_limit"),
+        Some(&Value::Number("7".into()))
+    );
+    assert_eq!(
+        jokers::list(&saved.data).unwrap().unwrap()[0].edition,
+        Ok(jokers::Edition::Negative)
+    );
+    assert!(!editor.app.dirty());
+}
+
+#[test]
+fn joker_changes_revert_and_do_not_leak_into_another_file() {
+    let mut editor = Editor::new(include_bytes!("../tests/fixtures/jokers.lua"));
+    editor.click_text("Jokers");
+    editor.frame(Vec::new());
+    editor.click_text("Foil");
+    editor.frame(Vec::new());
+    editor.click_text_match("Negative", true);
+    editor.app.execute(Pending::Revert, &editor.ctx);
+    editor.frame(Vec::new());
+    assert!(!editor.app.dirty());
+    assert_eq!(
+        editor.value("cardAreas.jokers.config.card_limit"),
+        &Value::Number("6".into())
+    );
+    let rows = jokers::list(&editor.app.document.as_ref().unwrap().data)
+        .unwrap()
+        .unwrap();
+    assert_eq!(rows[0].edition, Ok(jokers::Edition::Foil));
+    let new_path = editor._directory.path().join("profile.jkr");
+    let data = lua::parse(b"return {career_stats={c_wins=3}}").unwrap();
+    std::fs::write(&new_path, balatro_workshop::codec::encode(&data).unwrap()).unwrap();
+    editor.app.open(new_path);
+    editor.frame(Vec::new());
+    editor.click_text("Jokers");
+    editor.frame(Vec::new());
+    assert!(editor.output.shapes.iter().any(|s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text()=="Open the current run's save.jkr to see your Jokers.")));
+}
+
+#[test]
+fn unapplied_raw_edits_block_joker_controls_until_applied() {
+    let mut editor = Editor::new(include_bytes!("../tests/fixtures/jokers.lua"));
+    editor.click_text("Advanced text");
+    editor.app.raw = "return {cardAreas={jokers={config={card_limit=5},cards={}}}}".into();
+    editor.click_text("Jokers");
+    editor.frame(Vec::new());
+    assert!(editor.output.shapes.iter().any(|s| matches!(&s.shape, egui::epaint::Shape::Text(t) if t.galley.text().starts_with("Advanced text has unapplied"))));
+    editor.click_text("Advanced text");
+    editor.frame(Vec::new());
+    editor.click_text("Apply text");
+    editor.click_text("Jokers");
+    editor.frame(Vec::new());
+    assert!(jokers::list(&editor.app.document.as_ref().unwrap().data)
+        .unwrap()
+        .unwrap()
+        .is_empty());
 }

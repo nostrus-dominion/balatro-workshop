@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — 2026-10-31
+
+- Added a Jokers tab listing the owned Jokers from the loaded run in saved order, with names, internal IDs, and edition selectors.
+- Support Normal, Foil, Holographic, Polychrome, and Negative, including each edition's stored bonus values.
+- Adjust the saved Joker slot limit once when entering or leaving Negative; validate both edits before applying either.
+- Preserve abilities, stickers, other cards, sparse keys, and unknown save fields. Leave custom editions and recognized modded slot layouts unchanged with an explanation.
+- Keep edition edits in the existing save, backup, revert, Advanced text, and Play flows.
+- Added a synthetic six-Joker fixture and regression coverage for edition transitions, duplicate Jokers, invalid saves, backups, and dropdown interaction.
+- Retained the Linux X11 dependency fix and `linux_x86_64` artifact naming.
+
 ## 0.1.2 — 2026-10-26
 
 - Reworked Quick edit and Data tree text fields to retain an independent draft while typing. Complete values are accepted on Enter, focus loss, or Save; no intermediate disk save is needed.
@@ -33,6 +43,6 @@
 - Validate against real, anonymized saves from supported game versions and common mods.
 - Add a backup browser with preview and restore.
 - Add undo/redo history and a before/after change list.
-- Add dedicated joker/card editing after verifying game invariants.
+- Expand Joker editing beyond editions and add playing-card controls after verifying game invariants.
 - Evaluate calculator export compatibility separately.
 - Add signed Windows packages and notarized macOS releases when signing credentials are available.

@@ -26,12 +26,12 @@ jobs:
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
           components: rustfmt, clippy
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7.1.0
         with:
           python-version: '3.12'
       - uses: Swatinem/rust-cache@v2
@@ -48,7 +48,7 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: xvfb-run -a target/${{ matrix.target }}/release/balatro-workshop tests/fixtures/run.jkr --smoke-test
       - run: python scripts/package.py --target ${{ matrix.target }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ matrix.name || format('balatro-workshop-{0}', matrix.target) }}
           path: dist/*

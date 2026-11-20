@@ -29,6 +29,7 @@ impl Editor {
                 smoke: false,
                 edits: edits::ScalarEdits::default(),
                 document_id: 0,
+                selected_cards: HashSet::new(),
                 launcher: launch::SteamLauncher::default(),
                 play_prompt: false,
             },

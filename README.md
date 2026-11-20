@@ -7,7 +7,7 @@ A native, offline Balatro save editor for **Linux, Windows, and macOS**, written
 - Opens raw-DEFLATE `.jkr` saves and backups, including run, profile, settings, and collection data.
 - Edits money, ante, round, hand size, joker/consumable slots, hands, discards, reroll cost, probabilities, profile stats, and settings when those fields exist.
 - Lists the owned Jokers in a run by name and position. Change their edition to Normal, Foil, Holographic, Polychrome, or Negative using a dropdown; Negative slot changes are handled automatically.
-- Edits the rank, enhancement, and seal of each playing card in the saved run.
+- Edits the suit, rank, enhancement, and seal of each playing card, with multi-selection for applying one change to selected cards in the saved run.
 - Provides an expandable data tree and an advanced **data-only Lua table** editor. Numeric keys, sparse tables, byte strings, unknown fields, and decimal numeric text are preserved.
 - Finds candidate save folders on Windows, macOS, native Linux, and Steam/Proton, including Flatpak Steam and external Steam libraries. Browse any custom folder when automatic discovery misses it.
 - Creates a uniquely named, byte-for-byte backup before each source overwrite, validates output, and uses a same-directory temporary file to replace the save.

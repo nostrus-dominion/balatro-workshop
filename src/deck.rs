@@ -104,6 +104,21 @@ impl Rank {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Suit { Spades, Hearts, Clubs, Diamonds }
+impl Suit {
+    pub const ALL: [Self; 4] = [Self::Spades, Self::Hearts, Self::Clubs, Self::Diamonds];
+    pub const fn label(self) -> &'static str {
+        match self { Self::Spades => "Spades", Self::Hearts => "Hearts", Self::Clubs => "Clubs", Self::Diamonds => "Diamonds" }
+    }
+    fn prefix(self) -> char {
+        match self { Self::Spades => 'S', Self::Hearts => 'H', Self::Clubs => 'C', Self::Diamonds => 'D' }
+    }
+    fn nominal(self) -> &'static str {
+        match self { Self::Spades => "0.04", Self::Hearts => "0.03", Self::Clubs => "0.02", Self::Diamonds => "0.01" }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Enhancement {
     Normal,
     Bonus,
@@ -234,6 +249,7 @@ impl Seal {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Edit {
+    Suit(Suit),
     Rank(Rank),
     Enhancement(Enhancement),
     Seal(Seal),
@@ -242,6 +258,7 @@ pub enum Edit {
 impl Edit {
     pub fn label(self) -> &'static str {
         match self {
+            Self::Suit(suit) => suit.label(),
             Self::Rank(rank) => rank.label(),
             Self::Enhancement(enhancement) => enhancement.label(),
             Self::Seal(seal) => seal.label(),
@@ -253,7 +270,7 @@ impl Edit {
 pub struct Card {
     pub area: Area,
     pub slot: String,
-    pub suit: String,
+    pub suit: Result<Suit>,
     pub rank: Result<Rank>,
     pub enhancement: Result<Enhancement>,
     pub seal: Result<Seal>,
@@ -300,6 +317,11 @@ fn positive_integer(value: &str) -> Option<f64> {
 
 fn is_playing_card(card: &Value) -> bool {
     matches!(card.get("playing_card"), Some(Value::Number(n)) if positive_integer(n).is_some())
+}
+
+fn suit(card: &Value) -> Result<Suit> {
+    Suit::ALL.into_iter().find(|s| string(card.get("base.suit")) == Some(s.label()))
+        .ok_or_else(|| "Custom or unrecognized suit. Use Advanced text.".into())
 }
 
 fn suit_prefix(card: &Value) -> Option<char> {
@@ -378,9 +400,7 @@ pub fn list(data: &Value) -> Result<Option<Vec<Card>>> {
                     Card {
                         area,
                         slot: slot.clone(),
-                        suit: string(card.get("base.suit"))
-                            .unwrap_or("Unknown suit")
-                            .into(),
+                        suit: suit(card),
                         rank: rank_and_suit(card).map(|(rank, _)| rank),
                         enhancement: enhancement(card),
                         seal: seal(card),
@@ -405,6 +425,18 @@ pub fn apply(data: &mut Value, area: Area, slot: &str, edit: Edit) -> Result<()>
     .ok_or("This playing card is no longer in the loaded run.")?;
 
     match edit {
+        Edit::Suit(target) => {
+            let (rank, _) = rank_and_suit(card)?;
+            let current = suit(card)?;
+            if current != target {
+                put(card.get_mut("save_fields").unwrap(), "card", Some(string_value(&front(target.prefix(), rank))));
+                let base = card.get_mut("base").unwrap();
+                put(base, "suit", Some(string_value(target.label())));
+                put(base, "name", Some(string_value(&format!("{} of {}", rank.label(), target.label()))));
+                put(base, "suit_nominal", Some(number(target.nominal())));
+                put(base, "suit_nominal_original", Some(number(target.nominal())));
+            }
+        }
         Edit::Rank(target) => {
             let (current, prefix) = rank_and_suit(card)?;
             if current != target {

@@ -8,6 +8,7 @@ use balatro_workshop::{
 };
 use eframe::egui::{self, Color32, RichText};
 use std::{
+    collections::HashSet,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -51,6 +52,7 @@ struct Workshop {
     smoke: bool,
     edits: edits::ScalarEdits,
     document_id: u64,
+    selected_cards: HashSet<(deck::Area, String)>,
     launcher: launch::SteamLauncher,
     play_prompt: bool,
 }
@@ -93,6 +95,7 @@ impl Workshop {
             smoke,
             edits: edits::ScalarEdits::default(),
             document_id: 0,
+            selected_cards: HashSet::new(),
             launcher: launch::SteamLauncher::default(),
             play_prompt: false,
         };
@@ -120,6 +123,7 @@ impl Workshop {
             Ok(doc) => {
                 self.edits.clear();
                 self.document_id = self.document_id.wrapping_add(1);
+                self.selected_cards.clear();
                 self.document = Some(doc);
                 self.sync_raw();
                 self.tab = Tab::Quick;
@@ -503,91 +507,95 @@ impl Workshop {
     fn deck_editor(&mut self, ui: &mut egui::Ui) {
         let cards = match deck::list(&self.document.as_ref().unwrap().data) {
             Ok(Some(cards)) => cards,
-            Ok(None) => {
-                ui.label("Open the current run's save.jkr to edit its deck.");
-                return;
-            }
-            Err(error) => {
-                ui.colored_label(RED, error);
-                return;
-            }
+            Ok(None) => { ui.label("Open the current run's save.jkr to edit its deck."); return; }
+            Err(error) => { ui.colored_label(RED, error); return; }
         };
-        if cards.is_empty() {
-            ui.label("There are no playing cards in this saved run.");
-            return;
-        }
-
+        if cards.is_empty() { ui.label("There are no playing cards in this saved run."); return; }
         ui.heading(format!("{} playing cards", cards.len()));
-        let mut change = None;
-        egui::ScrollArea::vertical()
-            .id_salt("deck-scroll")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                for cards in cards.chunk_by(|left, right| left.area == right.area) {
-                    let area = cards[0].area;
-                    ui.add_space(8.0);
-                    ui.label(RichText::new(area.label()).color(GOLD).strong());
-                    egui::Grid::new(("deck-cards", self.document_id, area))
-                        .striped(true)
-                        .spacing([24.0, 6.0])
-                        .show(ui, |ui| {
-                            for heading in ["Card", "Rank", "Enhancement", "Seal"] {
-                                ui.label(RichText::new(heading).small().color(MUTED));
-                            }
-                            ui.end_row();
-                            for card in cards {
-                                let id = egui::Id::new((
-                                    "deck-card",
-                                    self.document_id,
-                                    area,
-                                    &card.slot,
-                                ));
-                                ui.label(format!("{} · {}", card.slot, card.suit));
-                                let rank = deck_choice(
-                                    ui,
-                                    id.with("Rank"),
-                                    &card.rank,
-                                    &deck::Rank::ALL,
-                                    deck::Rank::label,
-                                );
-                                let enhancement = deck_choice(
-                                    ui,
-                                    id.with("Enhancement"),
-                                    &card.enhancement,
-                                    &deck::Enhancement::ALL,
-                                    deck::Enhancement::label,
-                                );
-                                let seal = deck_choice(
-                                    ui,
-                                    id.with("Seal"),
-                                    &card.seal,
-                                    &deck::Seal::ALL,
-                                    deck::Seal::label,
-                                );
-                                let edit = rank
-                                    .map(deck::Edit::Rank)
-                                    .or(enhancement.map(deck::Edit::Enhancement))
-                                    .or(seal.map(deck::Edit::Seal));
-                                if let Some(edit) = edit {
-                                    change = Some((area, card.slot.as_str(), edit));
-                                }
-                                ui.end_row();
-                            }
-                        });
-                }
+        ui.horizontal(|ui| {
+            if ui.button("Select all").clicked() {
+                self.selected_cards = cards.iter().map(|c| (c.area, c.slot.clone())).collect();
+            }
+            if ui.button("Clear selection").clicked() { self.selected_cards.clear(); }
+            ui.label(format!("{} selected", self.selected_cards.len()));
+        });
+        ui.label(RichText::new("Select cards below, then apply only the fields you want to change. Unselected cards stay untouched.").color(MUTED));
+        let mut batch = None;
+        if !self.selected_cards.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Apply to selected:");
+                egui::ComboBox::from_id_salt("batch-suit").selected_text("Suit…").show_ui(ui, |ui| {
+                    for &value in &deck::Suit::ALL {
+                        if ui.button(value.label()).clicked() { batch = Some(deck::Edit::Suit(value)); ui.close_menu(); }
+                    }
+                });
+                egui::ComboBox::from_id_salt("batch-rank").selected_text("Rank…").show_ui(ui, |ui| {
+                    for &value in &deck::Rank::ALL {
+                        if ui.button(value.label()).clicked() { batch = Some(deck::Edit::Rank(value)); ui.close_menu(); }
+                    }
+                });
+                egui::ComboBox::from_id_salt("batch-enhancement").selected_text("Enhancement…").show_ui(ui, |ui| {
+                    for &value in &deck::Enhancement::ALL {
+                        if ui.button(value.label()).clicked() { batch = Some(deck::Edit::Enhancement(value)); ui.close_menu(); }
+                    }
+                });
+                egui::ComboBox::from_id_salt("batch-seal").selected_text("Seal…").show_ui(ui, |ui| {
+                    for &value in &deck::Seal::ALL {
+                        if ui.button(value.label()).clicked() { batch = Some(deck::Edit::Seal(value)); ui.close_menu(); }
+                    }
+                });
             });
+        }
+        let mut change = None;
+        egui::ScrollArea::vertical().id_salt("deck-scroll").auto_shrink([false, false]).show(ui, |ui| {
+            for group in cards.chunk_by(|a, b| a.area == b.area) {
+                let area = group[0].area;
+                ui.add_space(8.0);
+                ui.label(RichText::new(area.label()).color(GOLD).strong());
+                egui::Grid::new(("deck-cards", self.document_id, area))
+                    .striped(true).spacing([16.0, 6.0]).show(ui, |ui| {
+                    for heading in ["Select", "Card", "Suit", "Rank", "Enhancement", "Seal"] {
+                        ui.label(RichText::new(heading).small().color(MUTED));
+                    }
+                    ui.end_row();
+                    for card in group {
+                        let key = (area, card.slot.clone());
+                        let mut selected = self.selected_cards.contains(&key);
+                        if ui.checkbox(&mut selected, "").changed() {
+                            if selected { self.selected_cards.insert(key); }
+                            else { self.selected_cards.remove(&key); }
+                        }
+                        let id = egui::Id::new(("deck-card", self.document_id, area, &card.slot));
+                        ui.label(format!("#{}", card.slot));
+                        let suit = deck_choice(ui, id.with("Suit"), &card.suit, &deck::Suit::ALL, deck::Suit::label);
+                        let rank = deck_choice(ui, id.with("Rank"), &card.rank, &deck::Rank::ALL, deck::Rank::label);
+                        let enhancement = deck_choice(ui, id.with("Enhancement"), &card.enhancement, &deck::Enhancement::ALL, deck::Enhancement::label);
+                        let seal = deck_choice(ui, id.with("Seal"), &card.seal, &deck::Seal::ALL, deck::Seal::label);
+                        let edit = suit.map(deck::Edit::Suit).or(rank.map(deck::Edit::Rank))
+                            .or(enhancement.map(deck::Edit::Enhancement)).or(seal.map(deck::Edit::Seal));
+                        if let Some(edit) = edit { change = Some((area, card.slot.clone(), edit)); }
+                        ui.end_row();
+                    }
+                });
+            }
+        });
         if let Some((area, slot, edit)) = change {
-            match deck::apply(&mut self.document.as_mut().unwrap().data, area, slot, edit) {
-                Ok(()) => {
-                    self.error = None;
-                    self.status = format!(
-                        "{} card {slot}: {}. Save when ready.",
-                        area.label(),
-                        edit.label()
-                    );
-                }
+            match deck::apply(&mut self.document.as_mut().unwrap().data, area, &slot, edit) {
+                Ok(()) => { self.error = None; self.status = format!("{} card {slot}: {}. Save when ready.", area.label(), edit.label()); }
                 Err(error) => self.error = Some(error),
             }
+        }
+        if let Some(edit) = batch {
+            let mut updated = 0;
+            let mut errors = Vec::new();
+            for (area, slot) in &self.selected_cards {
+                match deck::apply(&mut self.document.as_mut().unwrap().data, *area, slot, edit) {
+                    Ok(()) => updated += 1,
+                    Err(error) => errors.push(format!("{} #{slot}: {error}", area.label())),
+                }
+            }
+            self.status = format!("Applied {} to {updated} selected cards. Save when ready.", edit.label());
+            self.error = (!errors.is_empty()).then(|| errors.join("; "));
         }
     }
 

@@ -3,8 +3,8 @@
 ## 0.3.0
 
 - Added a Deck tab for playing cards in the draw pile, hand, discard pile, and play area.
-- Change any base-game rank, enhancement, or seal per card. Clear an enhancement with Normal or a seal with None.
-- Keep the card's suit, edition, permanent chip bonuses, and saved position. Deck edits use the existing save, backup, and revert flows.
+- Change any base-game suit, rank, enhancement, or seal per card, or select multiple cards and apply one change to only those cards. Clear an enhancement with Normal or a seal with None.
+- Keep the card's edition, permanent chip bonuses, and saved position. Deck edits use the existing save, backup, and revert flows.
 
 ## 0.2.0 — 2026-10-31
 

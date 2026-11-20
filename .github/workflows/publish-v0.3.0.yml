@@ -1,0 +1,75 @@
+name: Publish Balatro Workshop v0.3.0
+
+on:
+  push:
+    branches: [release/publish-v0.3.0]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_RUN: '44807941336'
+      SOURCE_SHA: 'd9d6d494e7d42fea6791d67e8f08f0ce61110f8b'
+      RELEASE_TAG: v0.3.0
+    steps:
+      - name: Verify the source build
+        run: |
+          for attempt in {1..45}; do
+            gh run view "$SOURCE_RUN" --json headSha,headBranch,event,status,conclusion > run.json
+            if jq -e '.status == "completed"' run.json > /dev/null; then
+              break
+            fi
+            sleep 10
+          done
+          jq -e --arg sha "$SOURCE_SHA" '
+            .headSha == $sha and .headBranch == "main" and .event == "push"
+            and .status == "completed" and .conclusion == "success"
+          ' run.json
+      - name: Download and verify packages
+        run: |
+          gh run download "$SOURCE_RUN" --dir artifacts \
+            --name linux_x86_64 \
+            --name balatro-workshop-x86_64-pc-windows-msvc \
+            --name balatro-workshop-aarch64-apple-darwin \
+            --name balatro-workshop-x86_64-apple-darwin
+          mkdir release
+          for package in \
+            linux_x86_64.tar.gz \
+            balatro-workshop-0.3.0-windows-x86_64-pc-windows-msvc.zip \
+            balatro-workshop-0.3.0-darwin-aarch64-apple-darwin.zip \
+            balatro-workshop-0.3.0-darwin-x86_64-apple-darwin.zip
+          do
+            cp artifacts/*/"$package" artifacts/*/"$package.sha256" release/
+          done
+          cd release
+          sha256sum --strict --check -- *.sha256
+      - name: Publish release
+        run: |
+          if ! tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq .object.sha); then
+            tag_sha=$(gh api --method POST "repos/$GH_REPO/git/refs" \
+              -f ref="refs/tags/$RELEASE_TAG" -f sha="$SOURCE_SHA" --jq .object.sha)
+          fi
+          test "$tag_sha" = "$SOURCE_SHA"
+          cat > release-notes.md <<'EOF'
+          ## Deck editor
+
+          - Edit the suit, rank, enhancement, and seal of playing cards in the draw pile, hand, discard pile, or play area.
+          - Select multiple cards to apply a change to those cards together. Choose **Normal** to clear an enhancement or **None** to remove a seal.
+          - Preserve card editions, permanent chip bonuses, and saved positions. The existing save, backup, and revert controls apply to deck edits.
+
+          Downloads are available for Linux x86-64, Windows x86-64, macOS Apple Silicon, and macOS Intel. Each package comes with a SHA-256 checksum.
+
+          **Full changelog** · https://github.com/nostrus-dominion/balatro-workshop/compare/v0.2.0...v0.3.0
+          EOF
+          gh release create "$RELEASE_TAG" release/* --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md --latest
+          gh release view "$RELEASE_TAG" --json isDraft,assets \
+            --jq 'if .isDraft or (.assets | length) != 8 then error("Release verification failed") else .assets[].name end'
+      - name: Remove the temporary publishing branch
+        run: gh api --method DELETE "repos/$GH_REPO/git/refs/heads/release/publish-v0.3.0"

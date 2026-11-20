@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Added a Deck tab for playing cards in the draw pile, hand, discard pile, and play area.
+- Change any base-game suit, rank, enhancement, or seal per card, or select multiple cards and apply one change to only those cards. Clear an enhancement with Normal or a seal with None.
+- Keep the card's edition, permanent chip bonuses, and saved position. Deck edits use the existing save, backup, and revert flows.
+
 ## 0.2.0 — 2026-10-31
 
 - Added a Jokers tab listing the owned Jokers from the loaded run in saved order, with names, internal IDs, and edition selectors.
@@ -43,6 +49,6 @@
 - Validate against real, anonymized saves from supported game versions and common mods.
 - Add a backup browser with preview and restore.
 - Add undo/redo history and a before/after change list.
-- Expand Joker editing beyond editions and add playing-card controls after verifying game invariants.
+- Expand Joker editing beyond editions.
 - Evaluate calculator export compatibility separately.
 - Add signed Windows packages and notarized macOS releases when signing credentials are available.

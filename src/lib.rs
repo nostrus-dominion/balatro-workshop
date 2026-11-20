@@ -1,4 +1,5 @@
 pub mod codec;
+pub mod deck;
 pub mod discovery;
 pub mod document;
 pub mod fields;

@@ -7,6 +7,7 @@ A native, offline Balatro save editor for **Linux, Windows, and macOS**, written
 - Opens raw-DEFLATE `.jkr` saves and backups, including run, profile, settings, and collection data.
 - Edits money, ante, round, hand size, joker/consumable slots, hands, discards, reroll cost, probabilities, profile stats, and settings when those fields exist.
 - Lists the owned Jokers in a run by name and position. Change their edition to Normal, Foil, Holographic, Polychrome, or Negative using a dropdown; Negative slot changes are handled automatically.
+- Edits the suit, rank, enhancement, and seal of each playing card, with multi-selection for applying one change to selected cards in the saved run.
 - Provides an expandable data tree and an advanced **data-only Lua table** editor. Numeric keys, sparse tables, byte strings, unknown fields, and decimal numeric text are preserved.
 - Finds candidate save folders on Windows, macOS, native Linux, and Steam/Proton, including Flatpak Steam and external Steam libraries. Browse any custom folder when automatic discovery misses it.
 - Creates a uniquely named, byte-for-byte backup before each source overwrite, validates output, and uses a same-directory temporary file to replace the save.
@@ -63,13 +64,23 @@ Use `python` instead of `python3` on Windows if that is your installed command. 
 
 1. Close Balatro. Make sure you have a separate backup of the complete profile folder before your first edit.
 2. Open `save.jkr` for the active run, `profile.jkr` for profile stats, `settings.jkr` for preferences, or `meta.jkr` for collection data.
-3. Use **Jokers** for edition changes, change common values in **Quick edit**, edit values in **Data tree**, or edit the table in **Advanced text** and click **Apply text**.
+3. Use **Deck** for playing cards, **Jokers** for Joker editions, change common values in **Quick edit**, edit values in **Data tree**, or edit the table in **Advanced text** and click **Apply text**.
 4. Choose **Save + backup** to overwrite the opened file, or **Save copy** to create a separate file. Save copy switches the editor to the new file.
 5. Start Balatro and check the result. Steam Cloud may replace local edits during synchronization; resolve cloud conflicts deliberately.
 
 Quick controls change the named stored values, not every related piece of game state. For example, “Hands per round” changes `GAME.round_resets.hands`, not the current round's remaining hands. The data tree exposes other stored values. Slot changes may need a new round. Structurally valid values can still be unsuitable for the game's current state.
 
 **Revert** discards unsaved edits; it does not undo a previous disk save. **Discard text edits** discards only unapplied text changes. Changing files or closing the window prompts before discarding unsaved changes.
+
+### Edit a playing card
+
+Open the active run's `save.jkr` and choose **Deck**. Cards are grouped by draw pile, hand, discard pile, and in play. Each row has three controls:
+
+- **Rank** offers 2 through Ace and keeps the card's suit.
+- **Enhancement** offers Normal, Bonus, Mult, Wild, Glass, Steel, Stone, Gold, and Lucky. Choose Normal to remove an enhancement. Stone hides the underlying rank during play.
+- **Seal** offers None, Gold, Red, Blue, and Purple. Choose None to remove a seal.
+
+Use **Save + backup** or **Save copy** to write the changes. Unrecognized custom values are preserved and can be inspected in **Advanced text**. The editor preserves the saved round state, including any already-applied boss debuffs.
 
 ### Change a Joker's edition
 

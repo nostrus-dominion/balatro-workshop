@@ -382,3 +382,37 @@ fn unapplied_raw_edits_block_joker_controls_until_applied() {
         .unwrap()
         .is_empty());
 }
+
+#[test]
+fn deck_dropdowns_edit_rank_enhancement_and_seal_then_save_and_back_up() {
+    let mut editor = Editor::new(include_bytes!("../tests/fixtures/deck.lua"));
+    let path = editor.app.document.as_ref().unwrap().path.clone();
+    let original = std::fs::read(&path).unwrap();
+    editor.click_text("Deck");
+    editor.frame(Vec::new());
+    assert!(matches!(editor.app.tab, Tab::Deck));
+
+    for (current, target) in [("2", "10"), ("Normal", "Glass"), ("None", "Purple")] {
+        editor.click_text(current);
+        editor.frame(Vec::new());
+        editor.click_text_match(target, true);
+        editor.frame(Vec::new());
+        assert!(editor.app.error.is_none(), "{:?}", editor.app.error);
+    }
+    assert!(editor.app.dirty());
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    editor.key(egui::Key::S, egui::Modifiers::COMMAND);
+    let doc = editor.app.document.as_ref().unwrap();
+    assert_eq!(
+        std::fs::read(doc.last_backup.as_ref().unwrap()).unwrap(),
+        original
+    );
+
+    let saved = Document::open(&path).unwrap();
+    let cards = deck::list(&saved.data).unwrap().unwrap();
+    assert_eq!(cards[0].rank, Ok(deck::Rank::Ten));
+    assert_eq!(cards[0].enhancement, Ok(deck::Enhancement::Glass));
+    assert_eq!(cards[0].seal, Ok(deck::Seal::Purple));
+    assert_eq!(cards[2].rank, Ok(deck::Rank::Queen));
+    assert!(!editor.app.dirty());
+}

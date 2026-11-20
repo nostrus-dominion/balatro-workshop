@@ -1,7 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use balatro_workshop::{
-    discovery,
+    deck, discovery,
     document::{self, Document},
     fields, jokers,
     lua::{self, Key, Value},
@@ -26,6 +26,7 @@ mod ui_tests;
 enum Tab {
     Quick,
     Jokers,
+    Deck,
     Tree,
     Raw,
 }
@@ -384,6 +385,7 @@ impl Workshop {
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.tab, Tab::Quick, "Quick edit");
             ui.selectable_value(&mut self.tab, Tab::Jokers, "Jokers");
+            ui.selectable_value(&mut self.tab, Tab::Deck, "Deck");
             ui.selectable_value(&mut self.tab, Tab::Tree, "Data tree");
             ui.selectable_value(&mut self.tab, Tab::Raw, "Advanced text");
         });
@@ -401,6 +403,7 @@ impl Workshop {
         ui.add_space(6.0);
         match self.tab {
             Tab::Jokers => self.joker_editor(ui),
+            Tab::Deck => self.deck_editor(ui),
             Tab::Quick => {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.search)
@@ -493,6 +496,97 @@ impl Workshop {
                                 .desired_rows(30),
                         );
                     });
+            }
+        }
+    }
+
+    fn deck_editor(&mut self, ui: &mut egui::Ui) {
+        let cards = match deck::list(&self.document.as_ref().unwrap().data) {
+            Ok(Some(cards)) => cards,
+            Ok(None) => {
+                ui.label("Open the current run's save.jkr to edit its deck.");
+                return;
+            }
+            Err(error) => {
+                ui.colored_label(RED, error);
+                return;
+            }
+        };
+        if cards.is_empty() {
+            ui.label("There are no playing cards in this saved run.");
+            return;
+        }
+
+        ui.heading(format!("{} playing cards", cards.len()));
+        let mut change = None;
+        egui::ScrollArea::vertical()
+            .id_salt("deck-scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for cards in cards.chunk_by(|left, right| left.area == right.area) {
+                    let area = cards[0].area;
+                    ui.add_space(8.0);
+                    ui.label(RichText::new(area.label()).color(GOLD).strong());
+                    egui::Grid::new(("deck-cards", self.document_id, area))
+                        .striped(true)
+                        .spacing([24.0, 6.0])
+                        .show(ui, |ui| {
+                            for heading in ["Card", "Rank", "Enhancement", "Seal"] {
+                                ui.label(RichText::new(heading).small().color(MUTED));
+                            }
+                            ui.end_row();
+                            for card in cards {
+                                let id = egui::Id::new((
+                                    "deck-card",
+                                    self.document_id,
+                                    area,
+                                    &card.slot,
+                                ));
+                                ui.label(format!("{} · {}", card.slot, card.suit));
+                                let rank = deck_choice(
+                                    ui,
+                                    id.with("Rank"),
+                                    &card.rank,
+                                    &deck::Rank::ALL,
+                                    deck::Rank::label,
+                                );
+                                let enhancement = deck_choice(
+                                    ui,
+                                    id.with("Enhancement"),
+                                    &card.enhancement,
+                                    &deck::Enhancement::ALL,
+                                    deck::Enhancement::label,
+                                );
+                                let seal = deck_choice(
+                                    ui,
+                                    id.with("Seal"),
+                                    &card.seal,
+                                    &deck::Seal::ALL,
+                                    deck::Seal::label,
+                                );
+                                let edit = rank
+                                    .map(deck::Edit::Rank)
+                                    .or(enhancement.map(deck::Edit::Enhancement))
+                                    .or(seal.map(deck::Edit::Seal));
+                                if let Some(edit) = edit {
+                                    change = Some((area, card.slot.as_str(), edit));
+                                }
+                                ui.end_row();
+                            }
+                        });
+                }
+            });
+        if let Some((area, slot, edit)) = change {
+            match deck::apply(&mut self.document.as_mut().unwrap().data, area, slot, edit) {
+                Ok(()) => {
+                    self.error = None;
+                    self.status = format!(
+                        "{} card {slot}: {}. Save when ready.",
+                        area.label(),
+                        edit.label()
+                    );
+                }
+                Err(error) => self.error = Some(error),
             }
         }
     }
@@ -605,6 +699,36 @@ impl Workshop {
                 }
                 Err(error) => self.error = Some(error),
             }
+        }
+    }
+}
+
+fn deck_choice<T: Copy + PartialEq>(
+    ui: &mut egui::Ui,
+    id: egui::Id,
+    current: &Result<T, String>,
+    options: &[T],
+    label: impl Fn(T) -> &'static str,
+) -> Option<T> {
+    match current {
+        Ok(current) => {
+            let mut selected = *current;
+            egui::ComboBox::from_id_salt(id)
+                .selected_text(label(*current))
+                .width(94.0)
+                .height(400.0)
+                .show_ui(ui, |ui| {
+                    ui.spacing_mut().button_padding.y = 3.0;
+                    ui.spacing_mut().item_spacing.y = 4.0;
+                    for &value in options {
+                        ui.selectable_value(&mut selected, value, label(value));
+                    }
+                });
+            (selected != *current).then_some(selected)
+        }
+        Err(reason) => {
+            ui.colored_label(GOLD, "Custom").on_hover_text(reason);
+            None
         }
     }
 }

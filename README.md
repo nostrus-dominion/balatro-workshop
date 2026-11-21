@@ -7,7 +7,7 @@ A native, offline Balatro save editor for **Linux, Windows, and macOS**, written
 - Opens raw-DEFLATE `.jkr` saves and backups, including run, profile, settings, and collection data.
 - Edits money, ante, round, hand size, joker/consumable slots, hands, discards, reroll cost, probabilities, profile stats, and settings when those fields exist.
 - Lists the owned Jokers in a run by name and position. Change their edition to Normal, Foil, Holographic, Polychrome, or Negative using a dropdown; Negative slot changes are handled automatically.
-- Edits the suit, rank, enhancement, and seal of each playing card, with multi-selection for applying one change to selected cards in the saved run.
+- Edits the suit, rank, enhancement, edition, and seal of each playing card, with multi-selection for applying one change to selected cards in the saved run.
 - Provides an expandable data tree and an advanced **data-only Lua table** editor. Numeric keys, sparse tables, byte strings, unknown fields, and decimal numeric text are preserved.
 - Finds candidate save folders on Windows, macOS, native Linux, and Steam/Proton, including Flatpak Steam and external Steam libraries. Browse any custom folder when automatic discovery misses it.
 - Creates a uniquely named, byte-for-byte backup before each source overwrite, validates output, and uses a same-directory temporary file to replace the save.
@@ -74,11 +74,15 @@ Quick controls change the named stored values, not every related piece of game s
 
 ### Edit a playing card
 
-Open the active run's `save.jkr` and choose **Deck**. Cards are grouped by draw pile, hand, discard pile, and in play. Each row has three controls:
+Open the active run's `save.jkr` and choose **Deck**. Cards are grouped by draw pile, hand, discard pile, and in play.
 
+- **Suit** offers Spades, Hearts, Clubs, and Diamonds and keeps the card's rank.
 - **Rank** offers 2 through Ace and keeps the card's suit.
 - **Enhancement** offers Normal, Bonus, Mult, Wild, Glass, Steel, Stone, Gold, and Lucky. Choose Normal to remove an enhancement. Stone hides the underlying rank during play.
+- **Edition** offers Normal, Foil, Holographic, and Polychrome. Choose Normal to remove the edition. A card can be Lucky, Polychrome, and Red Seal at the same time.
 - **Seal** offers None, Gold, Red, Blue, and Purple. Choose None to remove a seal.
+
+To edit multiple cards, check their boxes or use **Select all**, then choose an option under **Apply to selected**. If a selected card cannot accept that edit, the editor lists the blocking cards and leaves the selection's saved data intact.
 
 Use **Save + backup** or **Save copy** to write the changes. Unrecognized custom values are preserved and can be inspected in **Advanced text**. The editor preserves the saved round state, including any already-applied boss debuffs.
 

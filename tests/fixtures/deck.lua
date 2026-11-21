@@ -45,6 +45,9 @@ return {
         base = { suit = "Spades", value = "5", name = "5 of Spades", id = 5, nominal = 5, face_nominal = 0 },
         ability = { set = "Default", name = "Default Base", effect = "Base" } },
     } },
+    jokers = { config = { card_limit = 5 }, cards = {
+      [1] = { save_fields = { center = "j_joker" }, ability = { set = "Joker", name = "Joker" } },
+    } },
     pack_cards = { cards = { [1] = { playing_card = 50 } } },
     shop_jokers = { cards = { [1] = { playing_card = 51 } } },
   },

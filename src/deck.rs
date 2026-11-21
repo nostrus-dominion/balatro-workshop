@@ -1,8 +1,20 @@
 //! Edit the base game's playing cards in their saved run areas.
+use std::collections::HashSet;
+
 use crate::{
+    edition,
     lua::{Key, Value},
     Result,
 };
+
+pub use crate::edition::Edition;
+
+pub const PLAYING_CARD_EDITIONS: [Edition; 4] = [
+    Edition::Normal,
+    Edition::Foil,
+    Edition::Holographic,
+    Edition::Polychrome,
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Area {
@@ -272,6 +284,7 @@ pub enum Edit {
     Suit(Suit),
     Rank(Rank),
     Enhancement(Enhancement),
+    Edition(Edition),
     Seal(Seal),
 }
 
@@ -281,6 +294,7 @@ impl Edit {
             Self::Suit(suit) => suit.label(),
             Self::Rank(rank) => rank.label(),
             Self::Enhancement(enhancement) => enhancement.label(),
+            Self::Edition(edition) => edition.label(),
             Self::Seal(seal) => seal.label(),
         }
     }
@@ -293,6 +307,7 @@ pub struct Card {
     pub suit: Result<Suit>,
     pub rank: Result<Rank>,
     pub enhancement: Result<Enhancement>,
+    pub edition: Result<Edition>,
     pub seal: Result<Seal>,
 }
 
@@ -384,6 +399,14 @@ fn enhancement(card: &Value) -> Result<Enhancement> {
         .ok_or_else(|| "Custom or unrecognized enhancement. Use Advanced text.".into())
 }
 
+fn playing_card_edition(card: &Value) -> Result<Edition> {
+    let edition = edition::read(card)?;
+    if edition == Edition::Negative {
+        return Err("Negative playing-card edition. Use Advanced text.".into());
+    }
+    Ok(edition)
+}
+
 fn seal(card: &Value) -> Result<Seal> {
     match card.get("seal") {
         None | Some(Value::Bool(false)) => Ok(Seal::None),
@@ -425,6 +448,7 @@ pub fn list(data: &Value) -> Result<Option<Vec<Card>>> {
                         suit: suit(card),
                         rank: rank_and_suit(card).map(|(rank, _)| rank),
                         enhancement: enhancement(card),
+                        edition: playing_card_edition(card),
                         seal: seal(card),
                     },
                 ));
@@ -436,16 +460,67 @@ pub fn list(data: &Value) -> Result<Option<Vec<Card>>> {
     Ok(found_area.then_some(rows))
 }
 
-pub fn apply(data: &mut Value, area: Area, slot: &str, edit: Edit) -> Result<()> {
-    let card = match data.get_mut(area.path()) {
-        Some(Value::Table(entries)) => entries
-            .iter_mut()
-            .find_map(|(key, card)| matches!(key, Key::Number(n) if n == slot).then_some(card))
-            .filter(|card| positive_integer(slot).is_some() && is_playing_card(card)),
-        _ => None,
-    }
-    .ok_or("This playing card is no longer in the loaded run.")?;
+const MISSING_CARD: &str = "This playing card is no longer in the loaded run.";
 
+fn card_index(entries: &[(Key, Value)], slot: &str) -> Result<usize> {
+    positive_integer(slot).ok_or(MISSING_CARD)?;
+    entries
+        .iter()
+        .position(|(key, _)| matches!(key, Key::Number(n) if n == slot))
+        .filter(|&index| is_playing_card(&entries[index].1))
+        .ok_or_else(|| MISSING_CARD.into())
+}
+
+pub fn apply(data: &mut Value, area: Area, slot: &str, edit: Edit) -> Result<()> {
+    let Some(Value::Table(entries)) = data.get_mut(area.path()) else {
+        return Err(MISSING_CARD.into());
+    };
+    let index = card_index(entries, slot)?;
+    apply_to_card(&mut entries[index].1, edit)
+}
+
+/// Stage edits on selected card copies, then commit only when every edit succeeds.
+/// Returns the number of cards whose saved data changed.
+pub fn apply_batch(
+    data: &mut Value,
+    selection: &HashSet<(Area, String)>,
+    edit: Edit,
+) -> Result<usize> {
+    let mut changes = Vec::new();
+    let mut errors = Vec::new();
+    for (area, slot) in selection {
+        let result: Result<Option<_>> = (|| {
+            let Some(Value::Table(entries)) = data.get(area.path()) else {
+                return Err(MISSING_CARD.into());
+            };
+            let index = card_index(entries, slot)?;
+            let original = &entries[index].1;
+            let mut updated = original.clone();
+            apply_to_card(&mut updated, edit)?;
+            Ok((updated != *original).then_some((*area, index, updated)))
+        })();
+        match result {
+            Ok(Some(change)) => changes.push(change),
+            Ok(None) => {}
+            Err(error) => errors.push(format!("{} #{slot}: {error}", area.label())),
+        }
+    }
+    if !errors.is_empty() {
+        errors.sort_unstable();
+        return Err(format!("No cards changed.\n{}", errors.join("\n")));
+    }
+
+    let changed_count = changes.len();
+    for (area, index, updated) in changes {
+        let Some(Value::Table(entries)) = data.get_mut(area.path()) else {
+            unreachable!("Card areas were validated before committing the batch");
+        };
+        entries[index].1 = updated;
+    }
+    Ok(changed_count)
+}
+
+fn apply_to_card(card: &mut Value, edit: Edit) -> Result<()> {
     match edit {
         Edit::Suit(target) => {
             let (rank, _) = rank_and_suit(card)?;
@@ -496,6 +571,14 @@ pub fn apply(data: &mut Value, area: Area, slot: &str, edit: Edit) -> Result<()>
         Edit::Enhancement(target) => {
             if enhancement(card)? != target {
                 target.apply(card);
+            }
+        }
+        Edit::Edition(target) => {
+            if target == Edition::Negative {
+                return Err("Negative is unavailable for playing-card edits.".into());
+            }
+            if playing_card_edition(card)? != target {
+                put(card, "edition", target.value());
             }
         }
         Edit::Seal(target) => {

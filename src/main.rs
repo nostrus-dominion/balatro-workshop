@@ -150,6 +150,7 @@ impl Workshop {
             }
             Pending::Revert => {
                 self.edits.clear();
+                self.selected_cards.clear();
                 self.document_id = self.document_id.wrapping_add(1);
                 if let Some(doc) = &mut self.document {
                     doc.revert();
@@ -464,6 +465,7 @@ impl Workshop {
                             Ok(data) => {
                                 self.edits.clear();
                                 self.document_id = self.document_id.wrapping_add(1);
+                                self.selected_cards.clear();
                                 self.document.as_mut().unwrap().data = data;
                                 self.sync_raw();
                                 self.error = None;
@@ -535,50 +537,38 @@ impl Workshop {
         if !self.selected_cards.is_empty() {
             ui.horizontal_wrapped(|ui| {
                 ui.label("Apply to selected:");
-                egui::ComboBox::from_id_salt("batch-suit")
-                    .selected_text("Suit…")
-                    .show_ui(ui, |ui| {
-                        for &value in &deck::Suit::ALL {
-                            if ui.button(value.label()).clicked() {
-                                batch = Some(deck::Edit::Suit(value));
-                                ui.close_menu();
-                            }
-                        }
-                    });
-                egui::ComboBox::from_id_salt("batch-rank")
-                    .selected_text("Rank…")
-                    .show_ui(ui, |ui| {
-                        for &value in &deck::Rank::ALL {
-                            if ui.button(value.label()).clicked() {
-                                batch = Some(deck::Edit::Rank(value));
-                                ui.close_menu();
-                            }
-                        }
-                    });
-                egui::ComboBox::from_id_salt("batch-enhancement")
-                    .selected_text("Enhancement…")
-                    .show_ui(ui, |ui| {
-                        for &value in &deck::Enhancement::ALL {
-                            if ui.button(value.label()).clicked() {
-                                batch = Some(deck::Edit::Enhancement(value));
-                                ui.close_menu();
-                            }
-                        }
-                    });
-                egui::ComboBox::from_id_salt("batch-seal")
-                    .selected_text("Seal…")
-                    .show_ui(ui, |ui| {
-                        for &value in &deck::Seal::ALL {
-                            if ui.button(value.label()).clicked() {
-                                batch = Some(deck::Edit::Seal(value));
-                                ui.close_menu();
-                            }
-                        }
-                    });
+                if let Some(value) = batch_choice(ui, "Suit…", &deck::Suit::ALL, deck::Suit::label)
+                {
+                    batch = Some(deck::Edit::Suit(value));
+                }
+                if let Some(value) = batch_choice(ui, "Rank…", &deck::Rank::ALL, deck::Rank::label)
+                {
+                    batch = Some(deck::Edit::Rank(value));
+                }
+                if let Some(value) = batch_choice(
+                    ui,
+                    "Enhancement…",
+                    &deck::Enhancement::ALL,
+                    deck::Enhancement::label,
+                ) {
+                    batch = Some(deck::Edit::Enhancement(value));
+                }
+                if let Some(value) = batch_choice(
+                    ui,
+                    "Edition…",
+                    &deck::PLAYING_CARD_EDITIONS,
+                    deck::Edition::label,
+                ) {
+                    batch = Some(deck::Edit::Edition(value));
+                }
+                if let Some(value) = batch_choice(ui, "Seal…", &deck::Seal::ALL, deck::Seal::label)
+                {
+                    batch = Some(deck::Edit::Seal(value));
+                }
             });
         }
         let mut change = None;
-        egui::ScrollArea::vertical()
+        egui::ScrollArea::both()
             .id_salt("deck-scroll")
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -588,10 +578,17 @@ impl Workshop {
                     ui.label(RichText::new(area.label()).color(GOLD).strong());
                     egui::Grid::new(("deck-cards", self.document_id, area))
                         .striped(true)
-                        .spacing([16.0, 6.0])
+                        .spacing([12.0, 6.0])
                         .show(ui, |ui| {
-                            for heading in ["Select", "Card", "Suit", "Rank", "Enhancement", "Seal"]
-                            {
+                            for heading in [
+                                "Select",
+                                "Card",
+                                "Suit",
+                                "Rank",
+                                "Enhancement",
+                                "Edition",
+                                "Seal",
+                            ] {
                                 ui.label(RichText::new(heading).small().color(MUTED));
                             }
                             ui.end_row();
@@ -633,6 +630,13 @@ impl Workshop {
                                     &deck::Enhancement::ALL,
                                     deck::Enhancement::label,
                                 );
+                                let edition = deck_choice(
+                                    ui,
+                                    id.with("Edition"),
+                                    &card.edition,
+                                    &deck::PLAYING_CARD_EDITIONS,
+                                    deck::Edition::label,
+                                );
                                 let seal = deck_choice(
                                     ui,
                                     id.with("Seal"),
@@ -644,6 +648,7 @@ impl Workshop {
                                     .map(deck::Edit::Suit)
                                     .or(rank.map(deck::Edit::Rank))
                                     .or(enhancement.map(deck::Edit::Enhancement))
+                                    .or(edition.map(deck::Edit::Edition))
                                     .or(seal.map(deck::Edit::Seal));
                                 if let Some(edit) = edit {
                                     change = Some((area, card.slot.clone(), edit));
@@ -667,19 +672,27 @@ impl Workshop {
             }
         }
         if let Some(edit) = batch {
-            let mut updated = 0;
-            let mut errors = Vec::new();
-            for (area, slot) in &self.selected_cards {
-                match deck::apply(&mut self.document.as_mut().unwrap().data, *area, slot, edit) {
-                    Ok(()) => updated += 1,
-                    Err(error) => errors.push(format!("{} #{slot}: {error}", area.label())),
+            match deck::apply_batch(
+                &mut self.document.as_mut().unwrap().data,
+                &self.selected_cards,
+                edit,
+            ) {
+                Ok(updated) => {
+                    self.error = None;
+                    self.status = match updated {
+                        0 => "All selected cards already have that value.".into(),
+                        1 => format!(
+                            "Applied {} to one selected card. Save when ready.",
+                            edit.label()
+                        ),
+                        _ => format!(
+                            "Applied {} to {updated} selected cards. Save when ready.",
+                            edit.label()
+                        ),
+                    };
                 }
+                Err(error) => self.error = Some(error),
             }
-            self.status = format!(
-                "Applied {} to {updated} selected cards. Save when ready.",
-                edit.label()
-            );
-            self.error = (!errors.is_empty()).then(|| errors.join("; "));
         }
     }
 
@@ -793,6 +806,23 @@ impl Workshop {
             }
         }
     }
+}
+
+fn batch_choice<T: Copy + PartialEq>(
+    ui: &mut egui::Ui,
+    caption: &str,
+    options: &[T],
+    label: impl Fn(T) -> &'static str,
+) -> Option<T> {
+    let mut selected = None;
+    egui::ComboBox::from_id_salt(caption)
+        .selected_text(caption)
+        .show_ui(ui, |ui| {
+            for &value in options {
+                ui.selectable_value(&mut selected, Some(value), label(value));
+            }
+        });
+    selected
 }
 
 fn deck_choice<T: Copy + PartialEq>(

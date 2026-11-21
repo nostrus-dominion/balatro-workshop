@@ -1,5 +1,5 @@
 use balatro_workshop::{
-    deck::{self, Area, Edit, Enhancement, Rank, Seal},
+    deck::{self, Area, Edit, Edition, Enhancement, Rank, Seal},
     lua::{self, Key, Value},
 };
 
@@ -275,6 +275,101 @@ fn seal_edits_round_trip_in_the_hand_and_none_removes_the_field() {
     };
     assert!(cards[0].1.get("seal").is_none());
     assert_eq!(data.get("cardAreas.deck"), fixture().get("cardAreas.deck"));
+}
+
+#[test]
+fn playing_card_editions_replace_the_previous_bonus_and_keep_other_modifiers() {
+    let mut data = fixture();
+    deck::apply(
+        &mut data,
+        Area::Deck,
+        "1",
+        Edit::Enhancement(Enhancement::Lucky),
+    )
+    .unwrap();
+    deck::apply(&mut data, Area::Deck, "1", Edit::Seal(Seal::Red)).unwrap();
+    let original = first_draw_card(&data).clone();
+
+    for (target, expected_edition) in [
+        (
+            Edition::Polychrome,
+            "{type='polychrome',polychrome=true,x_mult=1.5}",
+        ),
+        (Edition::Holographic, "{type='holo',holo=true,mult=10}"),
+        (Edition::Foil, "{type='foil',foil=true,chips=50}"),
+        (Edition::Normal, "false"),
+    ] {
+        deck::apply(&mut data, Area::Deck, "1", Edit::Edition(target)).unwrap();
+        let encoded = balatro_workshop::codec::encode(&data).unwrap();
+        data = balatro_workshop::codec::decode(&encoded).unwrap();
+        let cards = deck::list(&data).unwrap().unwrap();
+        assert_eq!(cards[0].edition, Ok(target));
+        assert_eq!(cards[0].enhancement, Ok(Enhancement::Lucky));
+        assert_eq!(cards[0].seal, Ok(Seal::Red));
+        let expected =
+            lua::parse(format!("return {{edition={expected_edition}}}").as_bytes()).unwrap();
+        let card = first_draw_card(&data);
+        assert_eq!(
+            card.get("edition"),
+            (target != Edition::Normal).then(|| expected.get("edition").unwrap())
+        );
+        for path in [
+            "ability",
+            "base",
+            "playing_card",
+            "save_fields",
+            "seal",
+            "unknown",
+        ] {
+            assert_eq!(card.get(path), original.get(path), "{path}");
+        }
+    }
+    let before = data.clone();
+    assert!(deck::apply(&mut data, Area::Deck, "1", Edit::Edition(Edition::Negative)).is_err());
+    assert_eq!(data, before);
+}
+
+#[test]
+fn a_batch_identifies_unsupported_and_missing_cards_before_changing_any_card() {
+    let mut data = fixture();
+    let Value::Table(cards) = data.get_mut("cardAreas.discard.cards").unwrap() else {
+        panic!("Missing discard pile");
+    };
+    let negative =
+        lua::parse(b"return {playing_card=3, edition={negative=true,type='negative'}}").unwrap();
+    cards[0].1 = negative;
+    let Value::Table(cards) = data.get_mut("cardAreas.play.cards").unwrap() else {
+        panic!("Missing play area");
+    };
+    cards[0].1 = lua::parse(b"return {playing_card=5, edition={custom=true}}").unwrap();
+
+    let before = data.clone();
+    let mut selection = [
+        (Area::Deck, "1".into()),
+        (Area::Hand, "1".into()),
+        (Area::Discard, "1".into()),
+        (Area::Play, "1".into()),
+        (Area::Deck, "99".into()),
+    ]
+    .into_iter()
+    .collect();
+    let edit = Edit::Edition(Edition::Polychrome);
+    let error = deck::apply_batch(&mut data, &selection, edit).unwrap_err();
+    assert!(error.starts_with("No cards changed."));
+    for name in ["Draw pile #99", "Discard pile #1", "In play #1"] {
+        assert!(error.contains(name), "{error}");
+    }
+    assert_eq!(data, before);
+
+    selection.remove(&(Area::Discard, "1".into()));
+    selection.remove(&(Area::Play, "1".into()));
+    selection.remove(&(Area::Deck, "99".into()));
+    assert_eq!(deck::apply_batch(&mut data, &selection, edit), Ok(2));
+    let mut expected = before;
+    deck::apply(&mut expected, Area::Deck, "1", edit).unwrap();
+    deck::apply(&mut expected, Area::Hand, "1", edit).unwrap();
+    assert_eq!(data, expected);
+    assert_eq!(deck::apply_batch(&mut data, &selection, edit), Ok(0));
 }
 
 #[test]

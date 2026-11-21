@@ -385,7 +385,7 @@ fn unapplied_raw_edits_block_joker_controls_until_applied() {
 }
 
 #[test]
-fn deck_dropdowns_edit_rank_enhancement_and_seal_then_save_and_back_up() {
+fn deck_and_joker_edits_survive_save_and_the_original_backup_restores_both() {
     let mut editor = Editor::new(include_bytes!("../tests/fixtures/deck.lua"));
     let path = editor.app.document.as_ref().unwrap().path.clone();
     let original = std::fs::read(&path).unwrap();
@@ -393,13 +393,34 @@ fn deck_dropdowns_edit_rank_enhancement_and_seal_then_save_and_back_up() {
     editor.frame(Vec::new());
     assert!(matches!(editor.app.tab, Tab::Deck));
 
-    for (current, target) in [("2", "10"), ("Normal", "Glass"), ("None", "Purple")] {
+    for (current, target) in [
+        ("Hearts", "Spades"),
+        ("2", "10"),
+        ("Normal", "Lucky"),
+        ("Foil", "Polychrome"),
+        ("None", "Red"),
+    ] {
         editor.click_text(current);
         editor.frame(Vec::new());
         editor.click_text_match(target, true);
         editor.frame(Vec::new());
         assert!(editor.app.error.is_none(), "{:?}", editor.app.error);
     }
+    editor.click_text("Select all");
+    editor.frame(Vec::new());
+    editor.click_text("Edition…");
+    editor.frame(Vec::new());
+    editor.click_text_match("Polychrome", true);
+    editor.frame(Vec::new());
+    assert!(editor.app.error.is_none(), "{:?}", editor.app.error);
+
+    editor.click_text("Jokers");
+    editor.frame(Vec::new());
+    editor.click_text("Normal");
+    editor.frame(Vec::new());
+    editor.click_text("Negative");
+    editor.frame(Vec::new());
+
     assert!(editor.app.dirty());
     assert_eq!(std::fs::read(&path).unwrap(), original);
     editor.key(egui::Key::S, egui::Modifiers::COMMAND);
@@ -411,9 +432,31 @@ fn deck_dropdowns_edit_rank_enhancement_and_seal_then_save_and_back_up() {
 
     let saved = Document::open(&path).unwrap();
     let cards = deck::list(&saved.data).unwrap().unwrap();
+    assert_eq!(cards[0].suit, Ok(deck::Suit::Spades));
     assert_eq!(cards[0].rank, Ok(deck::Rank::Ten));
-    assert_eq!(cards[0].enhancement, Ok(deck::Enhancement::Glass));
-    assert_eq!(cards[0].seal, Ok(deck::Seal::Purple));
+    assert_eq!(cards[0].enhancement, Ok(deck::Enhancement::Lucky));
+    assert_eq!(cards[0].seal, Ok(deck::Seal::Red));
+    assert!(cards
+        .iter()
+        .all(|card| card.edition == Ok(deck::Edition::Polychrome)));
     assert_eq!(cards[2].rank, Ok(deck::Rank::Queen));
+    assert_eq!(
+        jokers::list(&saved.data).unwrap().unwrap()[0].edition,
+        Ok(jokers::Edition::Negative)
+    );
+    assert_eq!(
+        saved.data.get("cardAreas.jokers.config.card_limit"),
+        Some(&Value::Number("6".into()))
+    );
     assert!(!editor.app.dirty());
+
+    let backup = doc.last_backup.as_ref().unwrap();
+    std::fs::copy(backup, &path).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    editor.app.open(path);
+    let restored = &editor.app.document.as_ref().unwrap().data;
+    assert_eq!(
+        *restored,
+        lua::parse(include_bytes!("../tests/fixtures/deck.lua")).unwrap()
+    );
 }

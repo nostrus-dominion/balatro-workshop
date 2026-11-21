@@ -2,6 +2,7 @@ pub mod codec;
 pub mod deck;
 pub mod discovery;
 pub mod document;
+mod edition;
 pub mod fields;
 pub mod jokers;
 pub mod lua;

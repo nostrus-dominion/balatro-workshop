@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Set playing-card editions to Normal, Foil, Holographic, or Polychrome, individually or for selected cards. Editions can coexist with enhancements and seals.
+- Batch edits now apply only after every selected card passes validation. Errors list the cards that blocked the change.
+
 ## 0.3.0
 
 - Added a Deck tab for playing cards in the draw pile, hand, discard pile, and play area.

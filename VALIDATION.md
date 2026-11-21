@@ -1,5 +1,20 @@
 # Validation
 
+## 0.3.1
+
+- `cargo fmt --check` and `cargo clippy --locked --all-targets -- -D warnings` passed on Linux x86-64.
+- `cargo test --locked` passed all 55 tests. The core-only suite passed all 38 tests.
+- Regression tests cover edition changes, unchanged cards outside the selection, and all-or-nothing results when a selection includes unsupported or missing cards.
+
+The automated save-and-restore test uses a synthetic run. It edits a playing card to Lucky, Polychrome, and Red Seal, applies a batch edition, switches an owned Joker to Negative, saves and reopens the run, then restores the byte-for-byte original backup. The in-game check below is pending a playable save and an installed copy of Balatro.
+
+### In-game save and restore check
+
+1. In a spare base-game profile, create a disposable run, buy a Joker, and reach a hand or shop where you can quit and resume. Record the game version, platform, and original run state. Close Balatro and copy the whole test profile somewhere separate.
+2. Open that profile's `save.jkr` in Workshop. Set one card to Lucky, Polychrome, and Red Seal. Change the edition of two other selected cards together. Change the owned Joker to Negative. Leave a comparable card unselected. Use **Save + backup** and keep the backup path.
+3. Launch Balatro, continue the run, and verify the edited cards and Joker, the extra Joker slot, and the unselected card. Play at least one hand and verify the edited playing-card edition scores when its card scores. Record the outcome, including any load error or Steam Cloud prompt.
+4. Close Balatro, keep a copy of the edited save, and replace `save.jkr` with the Workshop backup. Confirm the restored bytes match the original test-profile copy. Resume again and verify the original cards, Joker edition, and slot count.
+
 ## 0.2.0 — 2026-10-31
 
 - `cargo fmt --check` and `cargo clippy --locked --all-targets -- -D warnings`: passed on Linux x86-64.
